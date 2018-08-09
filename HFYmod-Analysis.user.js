@@ -1,19 +1,20 @@
 // ==UserScript==
 // @name         HFYmod-analysis
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0.2
+// @version      0.1.0.3
 // @description  A tool for analysing Reddit's HFY story submissions
 // @author       /u/sswanlake
 // @match        *.reddit.com/r/HFY/comments/*
 // @updateURL    https://github.com/sswanlake/HFYmod-Analysis/raw/master/HFYmod-Analysis.user.js
 // @grant        none
+// @require      https://cdn.plot.ly/plotly-latest.min.js
 // ==/UserScript==
 
-//previously: bold headers, cleaner arrays
-//what's new: number of stories with view-count in paren across top, cleaner table entries
+//previously: number of stories with view-count in paren across top, cleaner table entries
+//what's new: cleaned up flair section, GRAPHS!!!
 
 (function() {
-	'use strict';
+    'use strict';
 
     jQuery.fn.modal = function () {
         this.css("display","none");
@@ -39,7 +40,7 @@
         this.css("border", "1px solid #888");
         this.css("width", "80%");
         this.css("overflow-y", "initial");
-	    return this;
+        return this;
     }; //css modal-content
 
     function timeConvert(UNIX_timestamp) {
@@ -59,22 +60,22 @@
 
     (function($){$.fn.innerText = function(msg) {
         if (msg) {
-           if (document.body.innerText) {
-              for (var i in this) {
-                 this[i].innerText = msg;
-              }
-           } else {
-              for (var j in this) {
-                 this[j].innerHTML.replace(/&amp;lt;br&amp;gt;/gi,"n").replace(/(&amp;lt;([^&amp;gt;]+)&amp;gt;)/gi, "");
-              }
-           }
-           return this;
+            if (document.body.innerText) {
+                for (var i in this) {
+                    this[i].innerText = msg;
+                }
+            } else {
+                for (var j in this) {
+                    this[j].innerHTML.replace(/&amp;lt;br&amp;gt;/gi,"n").replace(/(&amp;lt;([^&amp;gt;]+)&amp;gt;)/gi, "");
+                }
+            }
+            return this;
         } else {
-           if (document.body.innerText) {
-              return this[0].innerText;
-           } else {
-              return this[0].innerHTML.replace(/&amp;lt;br&amp;gt;/gi,"n").replace(/(&amp;lt;([^&amp;gt;]+)&amp;gt;)/gi, "");
-           }
+            if (document.body.innerText) {
+                return this[0].innerText;
+            } else {
+                return this[0].innerHTML.replace(/&amp;lt;br&amp;gt;/gi,"n").replace(/(&amp;lt;([^&amp;gt;]+)&amp;gt;)/gi, "");
+            }
         }
     }; })(jQuery); //select inner text
 
@@ -86,34 +87,39 @@
             }
         }
         return newArray;
-    }; // Will remove all false values: undefined, null, 0, false, NaN and "" (empty string)
+    }; // Will remove all falsy values: undefined, null, 0, false, NaN and "" (empty string)
 
     $(document).ready(function(){
         var author = $(".author")[12].innerHTML; //the array=12 instance of the class "author". 0=you, 1=adamwizzy, 2-11=mods, 12=author, 13=first commenter, etc.
 
         var Btn2 = $('<button id="myBtn2" title="Analyze the author\'s submissions to HFY, totally not for evil purposes">Analysis <span id="pages"></span></button>');
         var BtnContent2 = $(`
-            <div id="myModal2" class="modal2" style="font-size: 120%;" >
-                <div class="modal-content2">
-                    <span class="close2" style="float:right; font-size:28px; font-weight:bold; cursor: pointer;">&times;</span>
-                    <p style="font-size: 200%" id="username"><a href="https://www.reddit.com/user/${author}" target="_blank">/u/${author}</a></p>
-                    <p><span id="totalSubmissions2" style="color:red"></span> total submissions, <span id="hfycount2" style="color:red"></span> of which are in HFY</p>
-                    <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Of those, <span id="storycount2" style="color:red"></span> are stories and <span id="metacount2" style="color:red"></span> are other submissions</p>
-                    <p>avg score: <span id="avgscore" style="color: red">will</span> - avg length: <span id="avglength" style="color: orange">this</span> - ttl length: <span id="totallength" style="color:green">work</span> - avg V-to-V: <span id="avgratio" style="color:blue">correctly</span> - avg days b/w: <span id="avgDaysBetw" style="color:purple">now?</span><span id="boop"></span></p>
-                    <hr/>
-                    <p><strong style="font-size: 150%">WIKI:</strong> <a href="https://www.reddit.com/r/HFY/wiki/authors/${author}" target="_blank" style="font-size: 150%">${author}</a>  &nbsp; &nbsp; <span id="existsYN"></span>  &nbsp; &nbsp; <a onclick="$('.authorpage').toggle()">hide author</a></p>
-                    <p>&nbsp;</p>
-                    <b><table><tr><td style="width:30px;">&nbsp;# </td><td style="width:400px;">Title </td><td style="width:140px;">Date </td><td style="width:70px;">Score </td><td style="width:55px;">Pages </td><td style="width:80px;">Views </td><td style="width:60px;">V-to-V</td><td>Days Between </td></tr></table></b>
-                    <div class="authorpage" id="authorpage" style="border:1px solid gray; background:Lavender; overflow-y:auto; overflow-x:auto;">
-                    <table><span id="stories2"></span></table>
-                    <p>&nbsp;</p>
-                    </div>
-                    <p>&nbsp;</p>
-                    <div class="endOfModal">
-                    </div>
+<div id="myModal2" class="modal2" style="font-size: 120%;" >
+    <div class="modal-content2">
+        <span class="close2" style="float:right; font-size:28px; font-weight:bold; cursor: pointer;">&times;</span>
+        <p style="font-size: 200%" id="username"><a href="https://www.reddit.com/user/${author}" target="_blank">/u/${author}</a></p>
+        <p><span id="totalSubmissions2" style="color:red"></span> total submissions, <span id="hfycount2" style="color:red"></span> of which are in HFY</p>
+        <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Of those, <span id="storycount2" style="color:red"></span> are stories and <span id="metacount2" style="color:red"></span> are other submissions</p>
+        <p>avg score: <span id="avgscore" style="color: red">will</span> - avg length: <span id="avglength" style="color: orange">this</span> - ttl length: <span id="totallength" style="color:green">work</span> - avg V-to-V: <span id="avgratio" style="color:blue">correctly</span> - avg days b/w: <span id="avgDaysBetw" style="color:purple">now?</span><span id="boop"></span></p>
+        <hr/>
+        <p><strong style="font-size: 150%">WIKI:</strong> <a href="https://www.reddit.com/r/HFY/wiki/authors/${author}" target="_blank" style="font-size: 150%">${author}</a>  &nbsp; &nbsp; <span id="existsYN"></span>  &nbsp; &nbsp; <a onclick="$('.authorpage').toggle()">hide author</a></p>
+        <p>&nbsp;</p>
+        <b><table><tr><td style="width:30px;">&nbsp;# </td><td style="width:400px;">Title </td><td style="width:140px;">Date </td><td style="width:70px;">Score </td><td style="width:55px;">Pages </td><td style="width:80px;">Views </td><td style="width:60px;">V-to-V</td><td>Days Between </td></tr></table></b>
+        <div class="authorpage" id="authorpage" style="border:1px solid gray; background:Lavender; height:250px; overflow-y:auto; overflow-x:auto;">
+        <table><span id="stories2"></span></table>
+        <p>&nbsp;</p>
+        </div>
+        <p>&nbsp;</p>
+        <div id="modalGraph">
+            <button id="graphBtn"> MAKE GRAPH </button>
+                <div id="graph1">
                 </div>
-            </div>
-        `); //td style="border: solid 1px gray;"
+        </div>
+        <div class="endOfModal">
+        </div>
+    </div>
+</div>
+`); //td style="border: solid 1px gray;"
 
         //add in the button and its contents and format css elements
         $(".expando").prepend(Btn2);
@@ -122,9 +128,9 @@
         $(".modal-content2").modalContent();
 
         $("#myBtn2").click(function() {
-	        $(".modal2").css("display","block");
+            $(".modal2").css("display","block");
             $('body').css("overflow", "hidden");
-	    }); // When the user clicks the button, open the modal
+        }); // When the user clicks the button, open the modal
 
         $('.close2')[0].onclick = function() {
             $('.modal2').css("display","none");
@@ -138,7 +144,7 @@
             }
         }; // close the modal if the user clicks outside the modal content
 
-	//getting the json with the information
+        //getting the json with the information
         var lastID = null;
         var counter = 0;
         var totalSubmissions2 = 0;
@@ -166,16 +172,13 @@
                         date = timeConvert(post.data.created_utc);
                         hfycount2++;
                         var flair = post.data.link_flair_css_class;
-                        if ((flair == "META") || (flair == "Text") || (flair == "Misc") || (flair == "Video") || (post.data.link_flair_text == "WP")){ //WP needs a special case because reasons. Meta used to be META. Also, there used to be a "meta mod" flair
-                            $("#otherposts2").prepend( `<tr><td><label>* <a href="${post.data.url}" contenteditable="true" title="flair: ${post.data.link_flair_text},  created: ${date},  score: ${post.data.score}">` + post.data.title + `</a></td><td><span style="color:blue">${date}</span> </td></td> <td>score:${post.data.score}</td></tr>` );
-                            metacount2++;
-                        } else {
-                            var ratio = post.data.upvote_ratio;
-                            var leng = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, '').length;
+                        var ratio = post.data.upvote_ratio;
+                        var leng = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, '').length;
+                        if ((post.data.link_flair_css_class == "OC") || (post.data.link_flair_text == "PI") || (post.data.link_flair_css_class == null)){ //WP is the class of current PI, but... that's messy
                             storycount2++;
                             datearray[storycount2] = post.data.created_utc;
                             dateDifArray[storycount2] = Math.abs( (post.data.created_utc - (datearray[storycount2-1]))/ (60 * 1000) ); //is in days
-                            if (dateDifArray[storycount2] >= 20000) {
+                            if (dateDifArray[storycount2] >= 24000) {
                                 dateDifArray[storycount2] = 0;
                             } //remove first eronious one, to make the numbers nice
 
@@ -212,7 +215,7 @@
                     }
                     $('#hfycount2').html(`${hfycount2}`);
                     $('#storycount2').html(`${storycount2}`);
-                    $('#metacount2').html(`${metacount2}`); //update numbers
+                    $('#metacount2').html(`${hfycount2 - storycount2}`); //update numbers
 
                     avgscore = totscore/storycount2;
                     avgleng = totleng/storycount2;
@@ -235,21 +238,72 @@
                     load(lastID);
                 }
             })
-              .error(function() {
-                  if (author == "[deleted]") {
+                .error(function() {
+                if (author == "[deleted]") {
                     $("#stories2").append( `<span style="color:red">ERROR - ACCOUNT DELETED</span>`);
                 } else {
-                      $("#stories2").append( `<span style="color:red">ERROR ... Shadowbanned?</span>`);
-                  }
-              }); //end error
+                    $("#stories2").append( `<span style="color:red">ERROR ... Shadowbanned?</span>`);
+                }
+            }); //end error
+
         } //end load
 
         load(lastID);
         var meh = $(".expando").text().replace(/(?:\r\n|\r|\n)/g, '').length;
         $("#pages").html( `- ${meh/2000}`); //length of current page, printed on the button
 
-        //graph: post#-time post#-score post#-pagecount score-pagecount
+        //graphing!
+        $('#graphBtn').click(function() {
+            scorearray.shift();
+            scorearray.reverse();
+            lengtharray.shift();
+            lengtharray.reverse();
+            datearray.shift();
+            datearray.reverse();
+            dateDifArray.shift();
+//            dateDifArray.shift();
+            dateDifArray.reverse();
 
+            console.log("SCORE:");
+            console.log(scorearray);
+            console.log("LENGTH:");
+            console.log(lengtharray);
+            console.log("DATE:");
+            console.log(datearray);
+
+            var graphDataTrace1 = {
+                x: scorearray.length,
+                y: scorearray,
+                type: 'scatter',
+                name: 'Score over time'
+            }
+
+            var graphDataTrace2 = {
+                x: lengtharray.length,
+                y: lengtharray,
+                type: 'scatter',
+                name: 'length over time'
+            }
+
+            var graphDataTrace3 = {
+                x: dateDifArray.length,
+                y: dateDifArray,
+                type: 'scatter',
+                name: 'time-between over time'
+                //line: {
+                //  color: 'rgb(219, 64, 82)'
+                //  }
+            }
+
+            var graphData = [graphDataTrace1, graphDataTrace2, graphDataTrace3];
+
+            var layout1 = {
+                yaxis: {rangemode: 'tozero',
+                        showline: true,
+                        zeroline: true}
+            };
+
+            Plotly.newPlot('graph1', graphData, layout1);
+        });
     }); //document ready
-
 })();
