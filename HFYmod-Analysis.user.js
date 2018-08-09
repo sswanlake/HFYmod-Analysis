@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HFYmod-analysis
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0.1
+// @version      0.1.0.2
 // @description  A tool for analysing Reddit's HFY story submissions
 // @author       /u/sswanlake
 // @match        *.reddit.com/r/HFY/comments/*
@@ -9,8 +9,8 @@
 // @grant        none
 // ==/UserScript==
 
-//previously: avg score, length, and vote-to-view ratio
-//what's new: days between stories, column labels
+//previously: bold headers, cleaner arrays
+//what's new: number of stories with view-count in paren across top, cleaner table entries
 
 (function() {
 	'use strict';
@@ -86,7 +86,7 @@
             }
         }
         return newArray;
-    }; // Will remove all falsy values: undefined, null, 0, false, NaN and "" (empty string)
+    }; // Will remove all false values: undefined, null, 0, false, NaN and "" (empty string)
 
     $(document).ready(function(){
         var author = $(".author")[12].innerHTML; //the array=12 instance of the class "author". 0=you, 1=adamwizzy, 2-11=mods, 12=author, 13=first commenter, etc.
@@ -166,33 +166,46 @@
                         date = timeConvert(post.data.created_utc);
                         hfycount2++;
                         var flair = post.data.link_flair_css_class;
-                        var ratio = post.data.upvote_ratio;
-                        //var ratio = 0.98;
-                        var leng = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, '').length;
                         if ((flair == "META") || (flair == "Text") || (flair == "Misc") || (flair == "Video") || (post.data.link_flair_text == "WP")){ //WP needs a special case because reasons. Meta used to be META. Also, there used to be a "meta mod" flair
                             $("#otherposts2").prepend( `<tr><td><label>* <a href="${post.data.url}" contenteditable="true" title="flair: ${post.data.link_flair_text},  created: ${date},  score: ${post.data.score}">` + post.data.title + `</a></td><td><span style="color:blue">${date}</span> </td></td> <td>score:${post.data.score}</td></tr>` );
                             metacount2++;
                         } else {
+                            var ratio = post.data.upvote_ratio;
+                            var leng = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, '').length;
                             storycount2++;
                             datearray[storycount2] = post.data.created_utc;
                             dateDifArray[storycount2] = Math.abs( (post.data.created_utc - (datearray[storycount2-1]))/ (60 * 1000) ); //is in days
-                            if (dateDifArray[storycount2] >= 24000) {
+                            if (dateDifArray[storycount2] >= 20000) {
                                 dateDifArray[storycount2] = 0;
                             } //remove first eronious one, to make the numbers nice
 
                             if (post.data.over_18) {
-                                $("#stories2").prepend( `<tr><td style="width:30px;">${storycount2}&nbsp;</td><td style="max-width:400px;width:400px"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">` + (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim() + `</a>] <emphasis style="color:red;">*NSFW*</emphasis>\n</label>&nbsp;</td><td style="color:purple">${date}&nbsp;</td><td style="color:darkred">score:${post.data.score}&nbsp;</td><td style="color:darkred">${leng/2000}&nbsp;</td><td style="color:darkred">views:${post.data.view_count}&nbsp;</td><td style="color:darkred">${(post.data.score)/(post.data.view_count)}&nbsp;</td><td style="color:darkred">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr>` );
+                                $("#stories2").prepend( `<tr><td style="width:30px;">${storycount2}&nbsp;</td>
+                                                                <td style="max-width:400px;width:400px"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">` + (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim() + `</a>] <emphasis style="color:red;">*NSFW*</emphasis>\n</label>&nbsp;</td>
+                                                                <td style="color:purple">${date}&nbsp;</td>
+                                                                <td style="color:darkred">score:${post.data.score}&nbsp;</td>
+                                                                <td style="color:darkred">${leng/2000}&nbsp;</td>
+                                                                <td style="color:darkred">views:${post.data.view_count}&nbsp;</td>
+                                                                <td style="color:darkred">${((post.data.score)*100/(post.data.view_count)).toFixed(3)}%&nbsp;</td>
+                                                                <td style="color:darkred">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr>` );
                             } else {
-                                $("#stories2").prepend( `<tr><td style="width:30px;">${storycount2}&nbsp;</td><td style="max-width:400px;width:400px"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">` + (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim() + `</a>]&nbsp;</td><td style="color:blue">${date}</span>&nbsp;</td><td>score:${post.data.score}&nbsp;</td><td style="color:green">${leng/2000}&nbsp;</td><td>views:${post.data.view_count}&nbsp;</td><td>${((post.data.score)*100/(post.data.view_count)).toFixed(3)}%&nbsp;</td><td style="color:purple">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr></label>` );
+                                $("#stories2").prepend( `<tr><td style="width:30px;">${storycount2}&nbsp;</td>
+                                                                <td style="max-width:400px;width:400px"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">` + (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim() + `</a>]&nbsp;</td>
+                                                                <td style="color:blue">${date}</span>&nbsp;</td>
+                                                                <td>score:${post.data.score}&nbsp;</td>
+                                                                <td style="color:green">${leng/2000}&nbsp;</td>
+                                                                <td>views:${post.data.view_count}&nbsp;</td>
+                                                                <td>${((post.data.score)*100/(post.data.view_count)).toFixed(3)}%&nbsp;</td>
+                                                                <td style="color:purple">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr></label>` );
                             }
 
-                            scorearray[storycount2] = post.data.score; //(50*storycount2) + i
+                            scorearray[storycount2] = post.data.score;
                             if (post.data.view_count > null){
-                                voteviewratioarray[storycount2] = (post.data.score)/(post.data.view_count); //(50*storycount2) + i
+                                voteviewratioarray[storycount2] = (post.data.score)/(post.data.view_count);
                             }
                             totscore += post.data.score;
                             $('#avg').html(`${avgscore}`);
-                            lengtharray[storycount2] = leng/2000; //(50*storycount2) + i
+                            lengtharray[storycount2] = leng/2000;
                             totleng += (leng/2000);
                             $('#avglength').html(`${avgleng}`);
                         }
@@ -208,7 +221,7 @@
                     $('#avgscore').html(`${avgscore.toFixed(4)}`);
                     $('#avglength').html(`${avgleng.toFixed(4)}`);
                     $("#totallength").html(`${totleng.toFixed(4)}`);
-                    $("#avgratio").html(`${((bl/al.length)*100).toFixed(3)}%`); //update average numbers
+                    $("#avgratio").html(`${((bl/al.length)*100).toFixed(3)}% <span style="color:gray">(${al.length})</span>`); //update average numbers
 
                     var cl = cleanArray(dateDifArray);
                     var dl = cl.reduce((a, b) => a + b, 0); //sums array values
