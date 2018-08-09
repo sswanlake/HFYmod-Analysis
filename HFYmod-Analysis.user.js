@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HFYmod-analysis
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.1.0.1
 // @description  A tool for analysing Reddit's HFY story submissions
 // @author       /u/sswanlake
 // @match        *.reddit.com/r/HFY/comments/*
@@ -103,8 +103,8 @@
                     <hr/>
                     <p><strong style="font-size: 150%">WIKI:</strong> <a href="https://www.reddit.com/r/HFY/wiki/authors/${author}" target="_blank" style="font-size: 150%">${author}</a>  &nbsp; &nbsp; <span id="existsYN"></span>  &nbsp; &nbsp; <a onclick="$('.authorpage').toggle()">hide author</a></p>
                     <p>&nbsp;</p>
+                    <b><table><tr><td style="width:30px;">&nbsp;# </td><td style="width:400px;">Title </td><td style="width:140px;">Date </td><td style="width:70px;">Score </td><td style="width:55px;">Pages </td><td style="width:80px;">Views </td><td style="width:60px;">V-to-V</td><td>Days Between </td></tr></table></b>
                     <div class="authorpage" id="authorpage" style="border:1px solid gray; background:Lavender; overflow-y:auto; overflow-x:auto;">
-                    <table><tr><td style="width:430px;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Title </td><td style="width:140px;">Date </td><td style="width:70px;">Score </td><td style="width:55px;">Pages </td><td style="width:80px;">Views </td><td style="width:60px;">V-to-V</td><td>Days Between </td></tr></table>
                     <table><span id="stories2"></span></table>
                     <p>&nbsp;</p>
                     </div>
@@ -113,7 +113,7 @@
                     </div>
                 </div>
             </div>
-        `);
+        `); //td style="border: solid 1px gray;"
 
         //add in the button and its contents and format css elements
         $(".expando").prepend(Btn2);
@@ -173,29 +173,28 @@
                             $("#otherposts2").prepend( `<tr><td><label>* <a href="${post.data.url}" contenteditable="true" title="flair: ${post.data.link_flair_text},  created: ${date},  score: ${post.data.score}">` + post.data.title + `</a></td><td><span style="color:blue">${date}</span> </td></td> <td>score:${post.data.score}</td></tr>` );
                             metacount2++;
                         } else {
-                            counter ++;
-                            datearray[counter] = post.data.created_utc;
-                            dateDifArray[counter] = Math.abs( (post.data.created_utc - (datearray[counter-1]))/ (60 * 1000) ); //is in days
-                            if (dateDifArray[counter] >= 24000) {
-                                dateDifArray[counter] = 0;
+                            storycount2++;
+                            datearray[storycount2] = post.data.created_utc;
+                            dateDifArray[storycount2] = Math.abs( (post.data.created_utc - (datearray[storycount2-1]))/ (60 * 1000) ); //is in days
+                            if (dateDifArray[storycount2] >= 24000) {
+                                dateDifArray[storycount2] = 0;
                             } //remove first eronious one, to make the numbers nice
 
                             if (post.data.over_18) {
-                                $("#stories2").prepend( `<tr><td style="width:20px;">${counter}&nbsp;</td><td style="max-width:400px;;width:400px"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">` + (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim() + `</a>] <emphasis style="color:red;">*NSFW*</emphasis>\n</label>&nbsp;</td><td style="color:purple">${date}&nbsp;</td><td style="color:darkred">score:${post.data.score}&nbsp;</td><td style="color:darkred">${leng/2000}&nbsp;</td><td style="color:darkred">views:${post.data.view_count}&nbsp;</td><td style="color:darkred">${(post.data.score)/(post.data.view_count)}&nbsp;</td><td style="color:darkred">${dateDifArray[counter].toFixed(3)}&nbsp;</td></tr>` );
+                                $("#stories2").prepend( `<tr><td style="width:30px;">${storycount2}&nbsp;</td><td style="max-width:400px;width:400px"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">` + (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim() + `</a>] <emphasis style="color:red;">*NSFW*</emphasis>\n</label>&nbsp;</td><td style="color:purple">${date}&nbsp;</td><td style="color:darkred">score:${post.data.score}&nbsp;</td><td style="color:darkred">${leng/2000}&nbsp;</td><td style="color:darkred">views:${post.data.view_count}&nbsp;</td><td style="color:darkred">${(post.data.score)/(post.data.view_count)}&nbsp;</td><td style="color:darkred">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr>` );
                             } else {
-                                $("#stories2").prepend( `<tr><td style="width:30px;">${counter}&nbsp;</td><td style="max-width:400px;width:400px"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">` + (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim() + `</a>]&nbsp;</td><td style="color:blue">${date}</span>&nbsp;</td><td>score:${post.data.score}&nbsp;</td><td style="color:green">${leng/2000}&nbsp;</td><td>views:${post.data.view_count}&nbsp;</td><td>${((post.data.score)*100/(post.data.view_count)).toFixed(3)}%&nbsp;</td><td style="color:purple">${dateDifArray[counter].toFixed(3)}&nbsp;</td></tr></label>` );
+                                $("#stories2").prepend( `<tr><td style="width:30px;">${storycount2}&nbsp;</td><td style="max-width:400px;width:400px"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">` + (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim() + `</a>]&nbsp;</td><td style="color:blue">${date}</span>&nbsp;</td><td>score:${post.data.score}&nbsp;</td><td style="color:green">${leng/2000}&nbsp;</td><td>views:${post.data.view_count}&nbsp;</td><td>${((post.data.score)*100/(post.data.view_count)).toFixed(3)}%&nbsp;</td><td style="color:purple">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr></label>` );
                             }
 
-                            scorearray[(50*counter) + i] = post.data.score;
+                            scorearray[storycount2] = post.data.score; //(50*storycount2) + i
                             if (post.data.view_count > null){
-                                voteviewratioarray[(50*counter) + i] = (post.data.score)/(post.data.view_count);
+                                voteviewratioarray[storycount2] = (post.data.score)/(post.data.view_count); //(50*storycount2) + i
                             }
                             totscore += post.data.score;
                             $('#avg').html(`${avgscore}`);
-                            lengtharray[(50*counter) + i] = leng/2000;
+                            lengtharray[storycount2] = leng/2000; //(50*storycount2) + i
                             totleng += (leng/2000);
                             $('#avglength').html(`${avgleng}`);
-                            storycount2++;
                         }
                     }
                     $('#hfycount2').html(`${hfycount2}`);
