@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HFYmod-analysis
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0.3
+// @version      0.1.0.4
 // @description  A tool for analysing Reddit's HFY story submissions
 // @author       /u/sswanlake
 // @match        *.reddit.com/r/HFY/comments/*
@@ -10,8 +10,8 @@
 // @require      https://cdn.plot.ly/plotly-latest.min.js
 // ==/UserScript==
 
-//previously: number of stories with view-count in paren across top, cleaner table entries
-//what's new: cleaned up flair section, GRAPHS!!!
+//previously: cleaned up flair section, GRAPHS!!!
+//what's new: fixed Days Between results, indent title, numbers on graph match story number w/o being backwards
 
 (function() {
     'use strict';
@@ -42,6 +42,10 @@
         this.css("overflow-y", "initial");
         return this;
     }; //css modal-content
+
+    jQuery.fn.tablenumbers = function () {
+        blep
+    }; //css add numbers to table rows
 
     function timeConvert(UNIX_timestamp) {
         var a = new Date(UNIX_timestamp * 1000);
@@ -106,7 +110,7 @@
         <p>&nbsp;</p>
         <b><table><tr><td style="width:30px;">&nbsp;# </td><td style="width:400px;">Title </td><td style="width:140px;">Date </td><td style="width:70px;">Score </td><td style="width:55px;">Pages </td><td style="width:80px;">Views </td><td style="width:60px;">V-to-V</td><td>Days Between </td></tr></table></b>
         <div class="authorpage" id="authorpage" style="border:1px solid gray; background:Lavender; height:250px; overflow-y:auto; overflow-x:auto;">
-        <table><span id="stories2"></span></table>
+        <table class="boop"><span id="stories2"></span></table>
         <p>&nbsp;</p>
         </div>
         <p>&nbsp;</p>
@@ -162,11 +166,13 @@
         var datearray = [0];
         var dateDifArray = [0];
         var voteviewratioarray = [0];
+        var arrayarray = [0];
 
         function load(after) {
             $.getJSON(`https://www.reddit.com/user/${author}/submitted.json?sort=new&after=${after}`, function (foo) {
                 var children = foo.data.children;
                 var date;
+                var storytitle;
                 $.each(children, function (i, post) {
                     if (post.data.subreddit == "HFY"){
                         date = timeConvert(post.data.created_utc);
@@ -174,17 +180,18 @@
                         var flair = post.data.link_flair_css_class;
                         var ratio = post.data.upvote_ratio;
                         var leng = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, '').length;
+                        storytitle = (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim()
                         if ((post.data.link_flair_css_class == "OC") || (post.data.link_flair_text == "PI") || (post.data.link_flair_css_class == null)){ //WP is the class of current PI, but... that's messy
                             storycount2++;
                             datearray[storycount2] = post.data.created_utc;
-                            dateDifArray[storycount2] = Math.abs( (post.data.created_utc - (datearray[storycount2-1]))/ (60 * 1000) ); //is in days
-                            if (dateDifArray[storycount2] >= 24000) {
+                            dateDifArray[storycount2] = Math.abs( (post.data.created_utc - (datearray[storycount2-1]))/ (60 * 60 * 24) ); //is in days // * 1000
+                            if (dateDifArray[storycount2] >= 10000) {
                                 dateDifArray[storycount2] = 0;
                             } //remove first eronious one, to make the numbers nice
 
                             if (post.data.over_18) {
                                 $("#stories2").prepend( `<tr><td style="width:30px;">${storycount2}&nbsp;</td>
-                                                                <td style="max-width:400px;width:400px"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">` + (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim() + `</a>] <emphasis style="color:red;">*NSFW*</emphasis>\n</label>&nbsp;</td>
+                                                                <td style="max-width:400px;width:400px;padding-left:15px;text-indent:-15px;"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>] <emphasis style="color:red;">*NSFW*</emphasis>\n</label>&nbsp;</td>
                                                                 <td style="color:purple">${date}&nbsp;</td>
                                                                 <td style="color:darkred">score:${post.data.score}&nbsp;</td>
                                                                 <td style="color:darkred">${leng/2000}&nbsp;</td>
@@ -193,7 +200,7 @@
                                                                 <td style="color:darkred">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr>` );
                             } else {
                                 $("#stories2").prepend( `<tr><td style="width:30px;">${storycount2}&nbsp;</td>
-                                                                <td style="max-width:400px;width:400px"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">` + (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim() + `</a>]&nbsp;</td>
+                                                                <td style="max-width:400px;width:400px;padding-left:15px;text-indent:-15px;"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>]&nbsp;</td>
                                                                 <td style="color:blue">${date}</span>&nbsp;</td>
                                                                 <td>score:${post.data.score}&nbsp;</td>
                                                                 <td style="color:green">${leng/2000}&nbsp;</td>
@@ -202,6 +209,7 @@
                                                                 <td style="color:purple">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr></label>` );
                             }
 
+                            arrayarray[storycount2] = storycount2;
                             scorearray[storycount2] = post.data.score;
                             if (post.data.view_count > null){
                                 voteviewratioarray[storycount2] = (post.data.score)/(post.data.view_count);
@@ -228,7 +236,7 @@
 
                     var cl = cleanArray(dateDifArray);
                     var dl = cl.reduce((a, b) => a + b, 0); //sums array values
-                    $("#avgDaysBetw").html(`${dl/storycount2}`);
+                    $("#avgDaysBetw").html(`${(dl/storycount2).toFixed(2)}`);
 
                 });
                 if (children && children.length > 0) {
@@ -254,22 +262,17 @@
 
         //graphing!
         $('#graphBtn').click(function() {
-            scorearray.shift();
-            scorearray.reverse();
-            lengtharray.shift();
-            lengtharray.reverse();
-            datearray.shift();
-            datearray.reverse();
-            dateDifArray.shift();
-//            dateDifArray.shift();
-            dateDifArray.reverse();
+//            scorearray.shift();
+//            lengtharray.shift();
+//            dateDifArray.shift(); //get rid of initial 0s
 
-            console.log("SCORE:");
-            console.log(scorearray);
-            console.log("LENGTH:");
-            console.log(lengtharray);
-            console.log("DATE:");
-            console.log(datearray);
+            var table = document.getElementsByClassName('boop')[0],
+                rows = table.rows,
+                text = 'textContent' in document ? 'textContent' : 'innerText';
+
+            for (var i = 0, len = rows.length; i < len; i++){
+                rows[i].children[0][text] = i + ': ' + rows[i].children[0][text];
+            }
 
             var graphDataTrace1 = {
                 x: scorearray.length,
@@ -289,10 +292,7 @@
                 x: dateDifArray.length,
                 y: dateDifArray,
                 type: 'scatter',
-                name: 'time-between over time'
-                //line: {
-                //  color: 'rgb(219, 64, 82)'
-                //  }
+                name: 'days between over time'
             }
 
             var graphData = [graphDataTrace1, graphDataTrace2, graphDataTrace3];
@@ -300,7 +300,8 @@
             var layout1 = {
                 yaxis: {rangemode: 'tozero',
                         showline: true,
-                        zeroline: true}
+                        zeroline: true},
+                xaxis: {autorange:'reversed'}
             };
 
             Plotly.newPlot('graph1', graphData, layout1);
