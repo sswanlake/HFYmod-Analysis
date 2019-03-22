@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HFYmod-analysis
 // @namespace    http://tampermonkey.net/
-// @version      0.1.2
+// @version      0.1.3
 // @description  A tool for analysing Reddit's HFY story submissions
 // @author       /u/sswanlake
 // @match        *.reddit.com/r/HFY/comments/*
@@ -10,14 +10,14 @@
 // @require      https://cdn.plot.ly/plotly-latest.min.js
 // ==/UserScript==
 
-//previously: days since last chapter, shows if removed, MinMax, chars
-//what's new: MinMax on load.done, subtracted modremoved, don't count modremoved in ttl/avg, added Days since first, cleaned up variables
-//todo: bring on top of all CSS, wordcount from Arkmuse, show if link to AM/Gdocs? (Machdhai, squiggles)
+//previously: MinMax on load.done, subtracted modremoved, don't count removed in ttl/avg, added Days since first, cleaned up variables
+//what's new: min/max words, # in 365, switched to if (Meta) else, number of comments, show hosted site, brought to the top in CSS
+//todo: wordcount from other hosting sites
 
 (function() {
     'use strict';
 
-    jQuery.fn.modal2 = function () {
+    jQuery.fn.modalbackground = function () {
         this.css("display","none");
         this.css("position", "fixed");
         this.css("padding-top", "100px");
@@ -29,10 +29,12 @@
         this.css("overflow", "auto"); //overflow-y
         this.css("background-color", "rgb(0,0,0)");
         this.css("background-color", "rgba(0,0,0,0.4)");
+        this.css("font-size", "120%");
+        this.css("z-index", "999");
         return this;
-    }; //css modal
+    }; //css modal background
 
-    jQuery.fn.modalContent2 = function () {
+    jQuery.fn.modalInside = function () {
         this.css("background-color", "#fefefe");
         this.css("color", "#000000");
         this.css("margin", "auto");
@@ -59,27 +61,6 @@
         return this.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
     }; //capitalize first letter of given string
 
-    (function($){$.fn.innerText = function(msg) {
-        if (msg) {
-            if (document.body.innerText) {
-                for (var i in this) {
-                    this[i].innerText = msg;
-                }
-            } else {
-                for (var j in this) {
-                    this[j].innerHTML.replace(/&amp;lt;br&amp;gt;/gi,"n").replace(/(&amp;lt;([^&amp;gt;]+)&amp;gt;)/gi, "");
-                }
-            }
-            return this;
-        } else {
-            if (document.body.innerText) {
-                return this[0].innerText;
-            } else {
-                return this[0].innerHTML.replace(/&amp;lt;br&amp;gt;/gi,"n").replace(/(&amp;lt;([^&amp;gt;]+)&amp;gt;)/gi, "");
-            }
-        }
-    }; })(jQuery); //select inner text
-
     function cleanArray(actual) {
         var newArray = new Array();
         for (var i = 0; i < actual.length; i++) {
@@ -90,23 +71,26 @@
         return newArray;
     }; // Will remove all falsy values: undefined, null, 0, false, NaN and "" (empty string)
 
+//---------------------------------------------------------------------------------------------
+
     $(document).ready(function(){
         var author = $(".author")[12].innerHTML; //the array=12 instance of the class "author". 0=you, 1=adamwizzy, 2-11=mods, 12=author, 13=first commenter, etc.
 
-        var Btn2 = $('<button id="myBtn2" title="Analyze the author\'s submissions to HFY, totally not for evil purposes">Analysis <span id="pages"></span></button>');
-        var BtnContent2 = $(`
-<div id="myModal2" class="modal2" style="font-size: 120%;" >
-    <div class="modal-content2">
-        <span class="close2" style="float:right; font-size:28px; font-weight:bold; cursor: pointer;">&times;</span>
+        var AnalysisBtn = $('<button id="AnalysisBtn" title="Analyze the author\'s submissions to HFY, totally not for evil purposes">Analysis <span id="pages"></span></button>'); //id="myModal2"
+        var AnalysisBtnContent = $(`
+<div class="modalbackground">
+    <div class="modalInside">
+        <span class="AnalysisClose" style="float:right; font-size:28px; font-weight:bold; cursor: pointer;">&times;</span>
         <p style="font-size: 200%" id="username"><a href="https://www.reddit.com/user/${author}" target="_blank">/u/${author}</a></p>
         <p><span id="totalSubmissions2" style="font-weight:bold; color:#0087BD;"></span> total submissions, <span id="hfycount2" style="font-weight:bold; color:#0087BD"></span> of which are in HFY</p>
+                    <p style="float:right"><span id="thisyear" style="color:red">0</span> stories in the last 365 days</p>
         <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Of those, <span id="storycount2" style="font-weight:bold; color:#0087BD"></span> are stories and <span id="metacount2" style="font-weight:bold; color:#0087BD"></span> are other submissions</p>
-        <p>avg score: <span id="avgscore" style="color: red">will</span> | avg pages: <span id="avglength" style="color: orange">this</span> | ttl pages: <span id="totallength" style="color:green">actually</span> | avg days b/w: <span id="avgDaysBetw" style="color:blue">work</span><span id="boop"></span> | days since latest: <span id="currentDays" style="color:DarkViolet">now?</span> | days since first: <span id="FirstDays" style="color:DarkViolet">...Ok</span> | <span id="NSFWcount2" style="color:red">grr</span> are <em style="background:Salmon; color:white">NSFW</em></p>
-        <p><span style="font-weight:bold">Max/Min:</span> <span style="color:red">Score:</span> <span id="scoremax">000</span>/ <span id="scoremin">000</span> | <span style="color:green">Pages:</span> <span id="lengthmax">000</span>/ <span id="lengthmin">000</span> | <span style="color:blue">Days b/w:</span> <span id="daysmax">000</span>/ <span id="daysmin">000</span></p>
+        <p>avg score: <span id="avgscore" style="color: red">will</span> | avg # comments: <span id="avgcomments" style="color:tomato">BOO</span> | avg pages: <span id="avglength" style="color: orange">this</span> | ttl pages: <span id="totallength" style="color:green">actually</span> | avg days b/w: <span id="avgDaysBetw" style="color:blue">work</span><span id="boop"></span> | days since latest: <span id="currentDays" style="color:DarkViolet">now?</span> | days since first: <span id="FirstDays" style="color:DarkViolet">...Ok</span> | <span id="NSFWcount2" style="color:red">grr</span> are <em style="background:Salmon; color:white">NSFW</em></p>
+        <p><span style="font-weight:bold">Max/Min:</span> <span style="color:red">Score:</span> <span id="scoremax">000</span>/ <span id="scoremin">000</span> | <span style="color:tomato">#Comments:</span> <span id="commMax">000</span>/ <span id="commMin">000</span> | <span style="color:orange">Words:</span> <span id="wordmax"></span>/ <span id="wordmin"></span>| <span style="color:green">Pages:</span> <span id="lengthmax">000</span>/ <span id="lengthmin">000</span> | <span style="color:blue">Days b/w:</span> <span id="daysmax">000</span>/ <span id="daysmin">000</span></p>
         <hr/>
         <p><strong style="font-size: 150%">WIKI:</strong> <a href="https://www.reddit.com/r/HFY/wiki/authors/${author}" target="_blank" style="font-size: 150%">${author}</a>  &nbsp; &nbsp; <span id="existsYN"></span>  &nbsp; &nbsp; <a onclick="$('.authorpage').toggle()">hide author</a></p>
         <p>&nbsp;</p>
-        <b><table><tr><td style="width:30px;">&nbsp;# </td><td style="width:400px;">Title </td><td style="width:140px;">Date </td><td style="width:70px;">Score </td><td style="width:55px;">Chars </td><td style="width:55px;">Words </td><td style="width:55px;">Pages </td><td>Days Between </td></tr></table></b>
+        <b><table><tr><td style="width:30px;">&nbsp;# </td><td style="width:400px;">Title </td><td style="width:140px;">Date </td><td style="width:70px;">Score </td><td style="width:55px">Comm.</td><td style="width:55px;">Chars </td><td style="width:55px;">Words </td><td style="width:55px;">Pages </td><td>Days Between </td></tr></table></b>
         <div class="authorpage" id="authorpage" style="border:1px solid gray; background:Lavender; height:250px; overflow-y:auto; overflow-x:auto;">
         <table class="boop"><span id="stories2"></span></table>
         <p>&nbsp;</p>
@@ -119,29 +103,29 @@
         </div>
     </div>
 </div>
-`); //td style="border: solid 1px gray;" //#0087BD; /*NSC Blue (gray-ish aqua)*/
-//<td style="width:80px;">Views </td><td style="width:60px;">V-to-V</td>
+`); //width:30px # - width:400px Title - width:140px Date - width:70px Score - width:55px Comments - width:55px Chars - width:55px Words - width:55px Pages - Days Between
+
 
 
         //add in the button and its contents and format css elements
-        $(".expando").prepend(Btn2);
-        $("body").append(BtnContent2);
-        $(".modal2").modal2();
-        $(".modal-content2").modalContent2();
+        $(".expando").prepend(AnalysisBtn);
+        $("body").append(AnalysisBtnContent);
+        $(".modalbackground").modalbackground();
+        $(".modalInside").modalInside();
 
-        $("#myBtn2").click(function() {
-            $(".modal2").css("display","block");
+        $("#AnalysisBtn").click(function() {
+            $(".modalbackground").css("display","block");
             $('body').css("overflow", "hidden");
         }); // When the user clicks the button, open the modal
 
-        $('.close2')[0].onclick = function() {
-            $('.modal2').css("display","none");
+        $('.AnalysisClose')[0].onclick = function() {
+            $('.modalbackground').css("display","none");
             $('body').css("overflow", "auto");
         }; // When the user clicks on <span> (x), close the modal
 
         window.onclick = function(event) {
-            if (event.target == $('.modal2')[0]) {
-                $('.modal2').css("display","none");
+            if (event.target == $('.modalbackground')[0]) {
+                $('.modalbackground').css("display","none");
                 $('body').css("overflow", "auto");
             }
         }; // close the modal if the user clicks outside the modal content
@@ -151,53 +135,64 @@
         var totalSubmissions2 = 0;
         var hfycount2 = 0;
         var storycount2 = 0;
-        var metacount2 = 0;
         var NSFWcount2 = 0;
+
         var modremovedcount2 = 0;
 
+        var date;
         var CurrentDays;
         var FirstDays;
+        var thisyear = 0;
+        var spaces = 0;
 
-        var totscore = 0;
-        var avgscore = 0;
-        var totleng = 0;
-        var avgleng = 0;
-
+        var commentsarray = [0];
         var scorearray = [0];
         var lengtharray = [0]; //in characters
         var datearray = [0];
         var dateDifArray = [0];
+        var wordarray = [0];
 
         function load(after) {
             $.getJSON(`https://www.reddit.com/user/${author}/submitted.json?sort=new&after=${after}`, function (foo) {
-                var children = foo.data.children;
-                var date;
-                // shortlink = `https://redd.it/${post.data.id}`;
-                $.each(children, function (i, post) {
+                $.each(foo.data.children, function (i, post) {
                     if (post.data.subreddit == "HFY"){
-                        date = timeConvert(post.data.created_utc);
-                        FirstDays = ((Date.now() /1000) - post.data.created_utc) / (60 * 60 * 24);
-                        $("#FirstDays").html(`${FirstDays.toFixed(2)}`);
                         hfycount2++;
                         var flair = post.data.link_flair_css_class;
-                        var leng = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, '').length; //remove all linebreaks .match(/([\s]+)/g).length
-                        var spaces = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, ' ').match(/([\s]+)/g).length; //count number of spaces (theoretically number of words)
-                        var storytitle = (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim()
-                        if ((post.data.link_flair_css_class == "OC") || (post.data.link_flair_text == "PI") || (post.data.link_flair_css_class == null)){ //WP is the class of current PI, but... that's messy
+                        if ( !((flair == "META") || (flair == "Text") || (flair == "Misc") || (flair == "Video") || (post.data.link_flair_text == "WP")) ){ //WP needs a special case because reasons. Meta used to be META. There used to be an "OC Oneshot" flair. Also, there used to be a "meta mod" flair
 
+                            date = timeConvert(post.data.created_utc);
+                            var leng = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, '').length; //remove all linebreaks .match(/([\s]+)/g).length
+                            if (post.data.selftext.length > 0) {var spaces = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, ' ').match(/([\s]+)/g).length; }//count number of spaces (theoretically number of words)
+                            var storytitle = (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim()
+//                            var shortlink = `https://redd.it/${post.data.id}`;
+
+                            var other = "";
                             if ( (post.data.selftext).includes(`](https://arkmuse.org/threads`) ) {
                                 leng = 0; //"|text to get| Other text....".match(/\|(.*?)\|/)
+                                other += "ArkMuse "
                             }; //if hosted on ArkMuse
                             if ( (post.data.selftext).includes(`](https://docs.google.com/document`) ) {
                                 leng = 0; //"|text to get| Other text....".match(/\|(.*?)\|/)
+                                other += "GDocs "
                             }; //if hosted on Gdocs
                             if ( (post.data.selftext).includes(`](https://www.royalroad.com/fiction`) ) {
                                 leng = 0; //"|text to get| Other text....".match(/\|(.*?)\|/)
+                                other += "RoyalRoad "
                             }; //if hosted on royalroad.com
 
-                            //width:30px # - width:400px Title - width:140px Date - width:70px Score - width:55px Chars - width:55px Words - width:55px Pages - Days Between
                             if ((!post.data.removed) && (!post.data.banned_by)){
+                                FirstDays = ((Date.now() /1000) - post.data.created_utc) / (60 * 60 * 24);
+                                $("#FirstDays").html(`${FirstDays.toFixed(2)}`);
+                                if (FirstDays <= 365) {
+                                    thisyear++;
+                                    $("#thisyear").html(`${thisyear}`);
+                                };
                                 storycount2++;
+
+                                scorearray[storycount2] = post.data.score;
+                                lengtharray[storycount2] = leng;
+                                wordarray[storycount2] = spaces;
+                                commentsarray[storycount2] = post.data.num_comments;
                                 datearray[storycount2] = post.data.created_utc;
                                 dateDifArray[storycount2] = Math.abs( (post.data.created_utc - datearray[storycount2-1]) / (60 * 60 * 24) ); //is in days
                                 CurrentDays = ((Date.now() /1000) - datearray[1]) / (60 * 60 * 24);
@@ -205,93 +200,101 @@
                                 if (dateDifArray[storycount2] >= 10000) {
 //                                    dateDifArray[storycount2] = 0;
                                     dateDifArray[storycount2] = CurrentDays; //add to graphs an' stuff
-                                } //remove first eronious one, to make the numbers nice
+                                } //fix first eronious one, to make the numbers nice
 
-                                scorearray[storycount2] = post.data.score;
-                                totscore += post.data.score;
-                                lengtharray[storycount2] = leng;
-                                totleng += leng;
-
+                            //width:30px # - width:400px Title - width:140px Date - width:70px Score - width:55px Comments - width:55px Chars - width:55px Words - width:55px Pages - width:55px Days Between - Hosted On
                                 if (post.data.over_18) {
-                                    $("#stories2").prepend( `<tr><td style="width:30px;">${storycount2}&nbsp;</td>
-                                                                    <td style="width:400px;width:400px;padding-left:15px;text-indent:-15px;"><label> [<a style="color:DarkSlateBlue" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>] <emphasis style="color:red;">*NSFW*</emphasis>\n</label>&nbsp;</td>
-                                                                    <td style="width:140px;color:purple">${date}&nbsp;</td>
-                                                                    <td style="width:70px;color:darkred">score:${post.data.score}&nbsp;</td>
-                                                                    <td style="width:55px;color:darkred">${leng}&nbsp;</td>
-                                                                    <td style="width:55px;color:darkred">${spaces}&nbsp;</td>
-                                                                    <td style="width:55px;color:darkred">${leng/2000}&nbsp;</td>
-                                                                    <td style="color:darkred">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr>` );
+                                    $("#stories2").prepend( `<tr style="color:darkred"><td style="width:30px;">${storycount2}&nbsp;</td>
+                                                                    <td style="width:400px;">[<a style="color:DarkSlateBlue" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>] <emphasis style="color:red;">*NSFW*</emphasis>&nbsp;</td>
+                                                                    <td style="width:140px;">${date}&nbsp;</td>
+                                                                    <td style="width:70px;">score:${post.data.score}&nbsp;</td>
+                                                                    <td style="width:55px;color:red">${commentsarray[storycount2]}&nbsp;</td>
+                                                                    <td style="width:55px;">${leng}&nbsp;</td>
+                                                                    <td style="width:55px;">${spaces}&nbsp;</td>
+                                                                    <td style="width:55px;">${leng/2000}&nbsp;</td>
+                                                                    <td style="width:55px;color:indianred">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
+                                                                    <td>${other}&nbsp;</td></tr>` );
                                     NSFWcount2++;
                                 } else {
                                     $("#stories2").prepend( `<tr><td style="width:30px;">${storycount2}&nbsp;</td>
-                                                                    <td style="width:400px;width:400px;padding-left:15px;text-indent:-15px;"><label> [<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>]&nbsp;</td>
+                                                                    <td style="width:400px;">[<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>]&nbsp;</td>
                                                                     <td style="width:140px;color:blue">${date}</span>&nbsp;</td>
                                                                     <td style="width:70px;">score:${post.data.score}&nbsp;</td>
+                                                                    <td style="width:55px;color:orange">${commentsarray[storycount2]}&nbsp;</td>
                                                                     <td style="width:55px;color:green">${leng}&nbsp;</td>
                                                                     <td style="width:55px;color:green">${spaces}&nbsp;</td>
                                                                     <td style="width:55px;color:green">${leng/2000}&nbsp;</td>
-                                                                    <td style="color:purple">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr></label>` );
-                                }
+                                                                    <td style="width:55px;color:purple">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
+                                                                    <td>${other}&nbsp;</td></tr>` );
+                                } //most things will be this
                             } else {
                                 modremovedcount2++;
+                                hfycount2--;
                                 if (post.data.over_18) {
-                                    $("#stories2").prepend( `<tr style="color:peru"><td style="width:30px;">${modremovedcount2}&nbsp;</td>
-                                                                    <td style="width:400px;width:400px;padding-left:15px;text-indent:-15px;"><label> [<a style="color:sienna" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>] <emphasis style="color:red;">*NSFW*</emphasis>\n</label>&nbsp;</td>
+                                    $("#stories2").prepend( `<tr style="color:sienna"><td style="width:30px;">${modremovedcount2}&nbsp;</td>
+                                                                    <td style="width:400px">[<a style="color:sienna" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>] <emphasis style="color:red;">*NSFW*</emphasis>&nbsp;</td>
                                                                     <td style="width:140px">${date}&nbsp;</td>
                                                                     <td style="width:70px">score:${post.data.score}&nbsp;</td>
+                                                                    <td style="width:55px">${commentsarray[storycount2]}&nbsp;</td>
                                                                     <td style="width:55px">${leng}&nbsp;</td>
                                                                     <td style="width:55px">${spaces}&nbsp;</td>
                                                                     <td style="width:55px">${leng/2000}&nbsp;</td>
-                                                                    <td>${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr>` );
+                                                                    <td style="width:55px">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
+                                                                    <td>${other}&nbsp;</td></tr>` );
                                 } else {
                                     $("#stories2").prepend( `<tr style="color:orange"><td style="width:30px;">${modremovedcount2}&nbsp;</td>
-                                                                    <td style="width:400px;width:400px;padding-left:15px;text-indent:-15px;"><label> [<a style="color:orange" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>]&nbsp;</td>
+                                                                    <td style="width:400px">[<a style="color:orange" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>]&nbsp;</td>
                                                                     <td style="width:140px;">${date}</span>&nbsp;</td>
                                                                     <td style="width:70px">score:${post.data.score}&nbsp;</td>
+                                                                    <td style="width:55px;color:coral">${commentsarray[storycount2]}&nbsp;</td>
                                                                     <td style="width:55px">${leng}&nbsp;</td>
                                                                     <td style="width:55px">${spaces}&nbsp;</td>
                                                                     <td style="width:55px">${leng/2000}&nbsp;</td>
-                                                                    <td>${dateDifArray[storycount2].toFixed(3)}&nbsp;</td></tr></label>` );
+                                                                    <td style="width:55px">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
+                                                                    <td>${other}&nbsp;</td></tr>` );
                                 } //end if NSFW
+//                                storycount2--;
                             }; //end if modremoved
-
-                        } else {
-                                metacount2++;
                         } //end if OC/PI
                     } //end if HFY
-                    $('#hfycount2').html(`${hfycount2-modremovedcount2}`);
-                    $('#storycount2').html(`${storycount2-modremovedcount2}`);
-//                    $('#metacount2').html(`${hfycount2 - storycount2}`); //more efficitne? probaby. causing problems? possibly
-                    $('#metacount2').html(`${metacount2}`);
-                    $('#modremovedcount2').html(`${modremovedcount2}`);
+
+                    //-------Update Numbers:-----------------------
+                    $('#hfycount2').html(`${hfycount2}`);
+                    $('#storycount2').html(`${storycount2}`);
+                    $('#metacount2').html(`${hfycount2 - storycount2}`);
                     $('#NSFWcount2').html(`${NSFWcount2}`); //update numbers of totaled things
-
-                    avgscore = totscore/storycount2;
-                    avgleng = (totleng/2000)/storycount2; //1 page is 2000 characters
-                    var cl = cleanArray(dateDifArray); //removes zeroes
-                    var dl = cl.reduce((a, b) => a + b, 0); //sums array values
-                    $("#avgDaysBetw").html(`${(dl/storycount2).toFixed(2)}`);
-                    $('#avgscore').html(`${avgscore.toFixed(2)}`);
-                    $('#avglength').html(`${avgleng.toFixed(2)}`);
-                    $("#totallength").html(`${(totleng/2000).toFixed(2)}`); //1 page is 2000 characters //update numbers of calculated things
-
+                    var cleanDif = cleanArray(dateDifArray); //removes zeroes
+                    $("#avgDaysBetw").html(`${(cleanDif.reduce((a,b) => a + b, 0) /storycount2).toFixed(2)}`);
+                    $('#avgscore').html(`${(scorearray.reduce((a,b) => a + b, 0) /storycount2).toFixed(2)}`);
+                    $('#avgcomments').html(`${(commentsarray.reduce((a,b) => a + b, 0) /storycount2).toFixed(1)}`); //summed then divided for avg
+                    $('#avglength').html(`${((lengtharray.reduce((a,b) => a + b, 0)/2000)/storycount2).toFixed(2)}`);  //1 page is 2000 characters
+                    $("#totallength").html(`${(lengtharray.reduce((a,b) => a + b, 0)/2000).toFixed(2)}`); //1 page is 2000 characters
+//                    $('#modremovedcount2').html(`${modremovedcount2}`);
                 }); //end each
-                if (children && children.length > 0) {
-                    lastID = children[children.length - 1].data.name;
-                    totalSubmissions2 += children.length;
+
+                if (foo.data.children && foo.data.children.length > 0) {
+                    lastID = foo.data.children[foo.data.children.length - 1].data.name;
+                    totalSubmissions2 += foo.data.children.length;
                     $('#totalSubmissions2').html(`${totalSubmissions2-modremovedcount2}`);
                     load(lastID);
-                }; //end if no children
+                }; //end if no posts
             }) //end getJSON
               .done(function() {
+
                 var scoremin = scorearray.filter(function(x){ return x> 0;}).sort(function(a,b){ return a>b; })[0];
+                var commentsmin = commentsarray.filter(function(x){ return x> 0;}).sort(function(a,b){ return a>b; })[0];
                 var lengthmin = lengtharray.filter(function(x){ return x> 0; }).sort(function(a,b){ return a>b; })[0];
                 var datemin = dateDifArray.filter(function(x){ return x> 0; }).sort(function(a,b){ return a>b; })[0];
+                var wordmin = wordarray.filter(function(x){ return x> 0; }).sort(function(a,b){ return a>b; })[0];
 
                 $('#scoremax').html(Math.max( ...scorearray));
                 $('#scoremin').html(scoremin);
+                $('#commMax').html(Math.max( ...commentsarray));
+                $('#commMin').html(commentsmin);
                 $('#lengthmax').html((Math.max( ...lengtharray) /2000).toFixed(2));
                 $('#lengthmin').html((lengthmin/2000).toFixed(2));
+                $('#wordmax').html((Math.max( ...wordarray)));
+                $('#wordmin').html(wordmin);
                 $('#daysmax').html(Math.max( ...dateDifArray).toFixed(2));
                 $('#daysmin').html(datemin.toFixed(3)); //dateDifArray.filter(Boolean)
               }) //end done getJSON (add in max/min)
@@ -347,7 +350,14 @@
                 name: 'days between over time'
             }
 
-            graphData = [graphDataTrace1, graphDataTrace2, graphDataTrace3];
+            var graphDataTrace4 = {
+                x: commentsarray.length,
+                y: commentsarray,
+                type: 'scatter',
+                name: 'number of comments over time'
+            }
+
+            graphData = [graphDataTrace1, graphDataTrace2, graphDataTrace3, graphDataTrace4];
 
             layout1 = {
                 yaxis: {rangemode: 'tozero',
@@ -359,7 +369,6 @@
             Plotly.newPlot('graph1', graphData, layout1);
         });
 
-
 //-----------------------Toggle------------------------------
 
         $('#setzero')[0].onclick = function() {
@@ -370,7 +379,6 @@
             Plotly.newPlot('graph1', graphData, layout1); //replot
             $('#daysmax').html(Math.max( ...dateDifArray).toFixed(2));
         };
-
 
         $('#sethigh')[0].onclick = function() {
             dateDifArray[1] = CurrentDays;
