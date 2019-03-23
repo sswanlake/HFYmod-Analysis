@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HFYmod-analysis
 // @namespace    http://tampermonkey.net/
-// @version      0.1.3
+// @version      0.1.4
 // @description  A tool for analysing Reddit's HFY story submissions
 // @author       /u/sswanlake
 // @match        *.reddit.com/r/HFY/comments/*
@@ -10,8 +10,8 @@
 // @require      https://cdn.plot.ly/plotly-latest.min.js
 // ==/UserScript==
 
-//previously: MinMax on load.done, subtracted modremoved, don't count removed in ttl/avg, added Days since first, cleaned up variables
-//what's new: min/max words, # in 365, switched to if (Meta) else, number of comments, show hosted site, brought to the top in CSS
+//previously: min/max words, # in 365, switched to if Meta else, number of comments, show hosted site, brought to the top
+//what's new: list linked series pages
 //todo: wordcount from other hosting sites
 
 (function() {
@@ -71,6 +71,47 @@
         return newArray;
     }; // Will remove all falsy values: undefined, null, 0, false, NaN and "" (empty string)
 
+    var getFromBetween = {
+        results:[],
+        string:"",
+        getFromBetween:function (sub1,sub2) {
+            if(this.string.indexOf(sub1) < 0 || this.string.indexOf(sub2) < 0) return false;
+            var SP = this.string.indexOf(sub1)+sub1.length;
+            var string1 = this.string.substr(0,SP);
+            var string2 = this.string.substr(SP);
+            var TP = string1.length + string2.indexOf(sub2);
+            return this.string.substring(SP,TP);
+        },
+        removeFromBetween:function (sub1,sub2) {
+            if(this.string.indexOf(sub1) < 0 || this.string.indexOf(sub2) < 0) return false;
+            var removal = sub1+this.getFromBetween(sub1,sub2)+sub2;
+            this.string = this.string.replace(removal,"");
+        },
+        getAllResults:function (sub1,sub2) {
+            // first check to see if we do have both substrings
+            if(this.string.indexOf(sub1) < 0 || this.string.indexOf(sub2) < 0) return;
+
+            // find one result
+            var result = this.getFromBetween(sub1,sub2);
+            // push it to the results array
+            this.results.push(result + ", ");
+            // remove the most recently found one from the string
+            this.removeFromBetween(sub1,sub2);
+
+            // if there's more substrings
+            if(this.string.indexOf(sub1) > -1 && this.string.indexOf(sub2) > -1) {
+                this.getAllResults(sub1,sub2);
+            }
+            else return;
+        },
+        get:function (string,sub1,sub2) {
+            this.results = [];
+            this.string = string;
+            this.getAllResults(sub1,sub2);
+            return this.results;
+        }
+    }; //get all substrings between two characters/strings //var result = getFromBetween.get(Contents,"(",")");
+
 //---------------------------------------------------------------------------------------------
 
     $(document).ready(function(){
@@ -89,6 +130,7 @@
         <p><span style="font-weight:bold">Max/Min:</span> <span style="color:red">Score:</span> <span id="scoremax">000</span>/ <span id="scoremin">000</span> | <span style="color:tomato">#Comments:</span> <span id="commMax">000</span>/ <span id="commMin">000</span> | <span style="color:orange">Words:</span> <span id="wordmax"></span>/ <span id="wordmin"></span>| <span style="color:green">Pages:</span> <span id="lengthmax">000</span>/ <span id="lengthmin">000</span> | <span style="color:blue">Days b/w:</span> <span id="daysmax">000</span>/ <span id="daysmin">000</span></p>
         <hr/>
         <p><strong style="font-size: 150%">WIKI:</strong> <a href="https://www.reddit.com/r/HFY/wiki/authors/${author}" target="_blank" style="font-size: 150%">${author}</a>  &nbsp; &nbsp; <span id="existsYN"></span>  &nbsp; &nbsp; <a onclick="$('.authorpage').toggle()">hide author</a></p>
+        <p><b>Existing Series Pages:</b> <span id="NGRAM"></span></p>
         <p>&nbsp;</p>
         <b><table><tr><td style="width:30px;">&nbsp;# </td><td style="width:400px;">Title </td><td style="width:140px;">Date </td><td style="width:70px;">Score </td><td style="width:55px">Comm.</td><td style="width:55px;">Chars </td><td style="width:55px;">Words </td><td style="width:55px;">Pages </td><td>Days Between </td></tr></table></b>
         <div class="authorpage" id="authorpage" style="border:1px solid gray; background:Lavender; height:250px; overflow-y:auto; overflow-x:auto;">
@@ -127,7 +169,11 @@
             if (event.target == $('.modalbackground')[0]) {
                 $('.modalbackground').css("display","none");
                 $('body').css("overflow", "auto");
-            }
+            } //for Analysis
+            if (event.target == $('.modal')[0]) {
+                $('.modal').css("display","none");
+                $('body').css("overflow", "auto");
+            } //for WikiTool because reasons (only one "onclick" command is allowed at a time, so you have to check for both)
         }; // close the modal if the user clicks outside the modal content
 
         //getting the json with the information
@@ -139,11 +185,9 @@
 
         var modremovedcount2 = 0;
 
-        var date;
         var CurrentDays;
         var FirstDays;
         var thisyear = 0;
-        var spaces = 0;
 
         var commentsarray = [0];
         var scorearray = [0];
@@ -160,7 +204,7 @@
                         var flair = post.data.link_flair_css_class;
                         if ( !((flair == "META") || (flair == "Text") || (flair == "Misc") || (flair == "Video") || (post.data.link_flair_text == "WP")) ){ //WP needs a special case because reasons. Meta used to be META. There used to be an "OC Oneshot" flair. Also, there used to be a "meta mod" flair
 
-                            date = timeConvert(post.data.created_utc);
+                            var date = timeConvert(post.data.created_utc);
                             var leng = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, '').length; //remove all linebreaks .match(/([\s]+)/g).length
                             if (post.data.selftext.length > 0) {var spaces = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, ' ').match(/([\s]+)/g).length; }//count number of spaces (theoretically number of words)
                             var storytitle = (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim()
@@ -269,7 +313,6 @@
                     $('#avgcomments').html(`${(commentsarray.reduce((a,b) => a + b, 0) /storycount2).toFixed(1)}`); //summed then divided for avg
                     $('#avglength').html(`${((lengtharray.reduce((a,b) => a + b, 0)/2000)/storycount2).toFixed(2)}`);  //1 page is 2000 characters
                     $("#totallength").html(`${(lengtharray.reduce((a,b) => a + b, 0)/2000).toFixed(2)}`); //1 page is 2000 characters
-//                    $('#modremovedcount2').html(`${modremovedcount2}`);
                 }); //end each
 
                 if (foo.data.children && foo.data.children.length > 0) {
@@ -297,8 +340,16 @@
                 $('#wordmin').html(wordmin);
                 $('#daysmax').html(Math.max( ...dateDifArray).toFixed(2));
                 $('#daysmin').html(datemin.toFixed(3)); //dateDifArray.filter(Boolean)
-              }) //end done getJSON (add in max/min)
-              .error(function() {
+
+                $.getJSON(`https://www.reddit.com/r/HFY/wiki/authors/${author}.json`, function (bar) {
+                    var Contents = bar.data.content_md.toLowerCase();
+                    var result = getFromBetween.get(Contents,"](/r/hfy/wiki/series/",")");
+                    var result2 = getFromBetween.get(Contents,"](/r/hfy/wiki/series/",")");
+                    $("#NGRAM").html(result2); //overwrites the suggested series area, but that's legacy for being slow
+                }); //end getJSON
+
+            }) //end done getJSON (add in max/min)
+            .error(function() {
                 if (author == "[deleted]") {
                     $("#stories2").append( `<span style="color:red">ERROR - ACCOUNT DELETED</span>`);
                 } else {
