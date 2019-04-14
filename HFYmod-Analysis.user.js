@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HFYmod-analysis
 // @namespace    http://tampermonkey.net/
-// @version      0.1.4
+// @version      0.1.5
 // @description  A tool for analysing Reddit's HFY story submissions
 // @author       /u/sswanlake
 // @match        *.reddit.com/r/HFY/comments/*
@@ -10,8 +10,8 @@
 // @require      https://cdn.plot.ly/plotly-latest.min.js
 // ==/UserScript==
 
-//previously: min/max words, # in 365, switched to if Meta else, number of comments, show hosted site, brought to the top
-//what's new: list linked series pages
+//previously: list linked series pages
+//what's new: fixed existing series glitch, existing series count
 //todo: wordcount from other hosting sites
 
 (function() {
@@ -71,6 +71,7 @@
         return newArray;
     }; // Will remove all falsy values: undefined, null, 0, false, NaN and "" (empty string)
 
+    var seriesCounter = 0;
     var getFromBetween = {
         results:[],
         string:"",
@@ -94,7 +95,8 @@
             // find one result
             var result = this.getFromBetween(sub1,sub2);
             // push it to the results array
-            this.results.push(result + ", ");
+            this.results.push("[" + result + "], &nbsp; ");
+            seriesCounter++;
             // remove the most recently found one from the string
             this.removeFromBetween(sub1,sub2);
 
@@ -124,13 +126,13 @@
         <span class="AnalysisClose" style="float:right; font-size:28px; font-weight:bold; cursor: pointer;">&times;</span>
         <p style="font-size: 200%" id="username"><a href="https://www.reddit.com/user/${author}" target="_blank">/u/${author}</a></p>
         <p><span id="totalSubmissions2" style="font-weight:bold; color:#0087BD;"></span> total submissions, <span id="hfycount2" style="font-weight:bold; color:#0087BD"></span> of which are in HFY</p>
-                    <p style="float:right"><span id="thisyear" style="color:red">0</span> stories in the last 365 days</p>
+                    <p style="float:right"><span id="thisyear" style="color:red">0</span> stories in the last 365 days | <span id="modremovedcount2" style="color:red"></span> have been mod removed</p>
         <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Of those, <span id="storycount2" style="font-weight:bold; color:#0087BD"></span> are stories and <span id="metacount2" style="font-weight:bold; color:#0087BD"></span> are other submissions</p>
         <p>avg score: <span id="avgscore" style="color: red">will</span> | avg # comments: <span id="avgcomments" style="color:tomato">BOO</span> | avg pages: <span id="avglength" style="color: orange">this</span> | ttl pages: <span id="totallength" style="color:green">actually</span> | avg days b/w: <span id="avgDaysBetw" style="color:blue">work</span><span id="boop"></span> | days since latest: <span id="currentDays" style="color:DarkViolet">now?</span> | days since first: <span id="FirstDays" style="color:DarkViolet">...Ok</span> | <span id="NSFWcount2" style="color:red">grr</span> are <em style="background:Salmon; color:white">NSFW</em></p>
         <p><span style="font-weight:bold">Max/Min:</span> <span style="color:red">Score:</span> <span id="scoremax">000</span>/ <span id="scoremin">000</span> | <span style="color:tomato">#Comments:</span> <span id="commMax">000</span>/ <span id="commMin">000</span> | <span style="color:orange">Words:</span> <span id="wordmax"></span>/ <span id="wordmin"></span>| <span style="color:green">Pages:</span> <span id="lengthmax">000</span>/ <span id="lengthmin">000</span> | <span style="color:blue">Days b/w:</span> <span id="daysmax">000</span>/ <span id="daysmin">000</span></p>
         <hr/>
         <p><strong style="font-size: 150%">WIKI:</strong> <a href="https://www.reddit.com/r/HFY/wiki/authors/${author}" target="_blank" style="font-size: 150%">${author}</a>  &nbsp; &nbsp; <span id="existsYN"></span>  &nbsp; &nbsp; <a onclick="$('.authorpage').toggle()">hide author</a></p>
-        <p><b>Existing Series Pages:</b> <span id="NGRAM"></span></p>
+        <p><b>Existing Series Pages:</b> <span id="NumSerAnalasis" style="color:navy; background-color:lightgreen"></span><span id="NGRAM" style="color:forestgreen"></span></p>
         <p>&nbsp;</p>
         <b><table><tr><td style="width:30px;">&nbsp;# </td><td style="width:400px;">Title </td><td style="width:140px;">Date </td><td style="width:70px;">Score </td><td style="width:55px">Comm.</td><td style="width:55px;">Chars </td><td style="width:55px;">Words </td><td style="width:55px;">Pages </td><td>Days Between </td></tr></table></b>
         <div class="authorpage" id="authorpage" style="border:1px solid gray; background:Lavender; height:250px; overflow-y:auto; overflow-x:auto;">
@@ -207,21 +209,21 @@
                             var date = timeConvert(post.data.created_utc);
                             var leng = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, '').length; //remove all linebreaks .match(/([\s]+)/g).length
                             if (post.data.selftext.length > 0) {var spaces = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, ' ').match(/([\s]+)/g).length; }//count number of spaces (theoretically number of words)
-                            var storytitle = (post.data.title).replace(`[OC]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim()
+                            var storytitle = (post.data.title).replace(`[OC]`, '').replace(`[oc]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim()
 //                            var shortlink = `https://redd.it/${post.data.id}`;
 
                             var other = "";
                             if ( (post.data.selftext).includes(`](https://arkmuse.org/threads`) ) {
-                                leng = 0; //"|text to get| Other text....".match(/\|(.*?)\|/)
-                                other += "ArkMuse "
+                                if (leng < 600) { leng = 0; }
+                                other += "ArkMuse ";
                             }; //if hosted on ArkMuse
                             if ( (post.data.selftext).includes(`](https://docs.google.com/document`) ) {
-                                leng = 0; //"|text to get| Other text....".match(/\|(.*?)\|/)
-                                other += "GDocs "
+                                if (leng < 600) { leng = 0; }
+                                other += "GDocs ";
                             }; //if hosted on Gdocs
-                            if ( (post.data.selftext).includes(`](https://www.royalroad.com/fiction`) ) {
-                                leng = 0; //"|text to get| Other text....".match(/\|(.*?)\|/)
-                                other += "RoyalRoad "
+                            if ( (post.data.selftext).includes(`](https://www.royalroad.com/fiction/`) || (post.data.selftext).includes(`](https://www.royalroadl.com/fiction/`) ) {
+                                if (leng < 600) { leng = 0; } //"|text to get| Other text....".match(/\|(.*?)\|/)
+                                other += "RoyalRoad ";
                             }; //if hosted on royalroad.com
 
                             if ((!post.data.removed) && (!post.data.banned_by)){
@@ -313,6 +315,7 @@
                     $('#avgcomments').html(`${(commentsarray.reduce((a,b) => a + b, 0) /storycount2).toFixed(1)}`); //summed then divided for avg
                     $('#avglength').html(`${((lengtharray.reduce((a,b) => a + b, 0)/2000)/storycount2).toFixed(2)}`);  //1 page is 2000 characters
                     $("#totallength").html(`${(lengtharray.reduce((a,b) => a + b, 0)/2000).toFixed(2)}`); //1 page is 2000 characters
+                    $('#modremovedcount2').html(`${modremovedcount2}`);
                 }); //end each
 
                 if (foo.data.children && foo.data.children.length > 0) {
@@ -343,9 +346,10 @@
 
                 $.getJSON(`https://www.reddit.com/r/HFY/wiki/authors/${author}.json`, function (bar) {
                     var Contents = bar.data.content_md.toLowerCase();
-                    var result = getFromBetween.get(Contents,"](/r/hfy/wiki/series/",")");
-                    var result2 = getFromBetween.get(Contents,"](/r/hfy/wiki/series/",")");
+                    seriesCounter = 0;
+                    var result2 = getFromBetween.get(Contents,"/r/hfy/wiki/series/",")");
                     $("#NGRAM").html(result2); //overwrites the suggested series area, but that's legacy for being slow
+                    $("#NumSerAnalasis").html(seriesCounter);
                 }); //end getJSON
 
             }) //end done getJSON (add in max/min)
@@ -429,7 +433,7 @@
 
             Plotly.newPlot('graph1', graphData, layout1); //replot
             $('#daysmax').html(Math.max( ...dateDifArray).toFixed(2));
-        };
+        }; //end set zero
 
         $('#sethigh')[0].onclick = function() {
             dateDifArray[1] = CurrentDays;
@@ -438,7 +442,7 @@
 
             Plotly.newPlot('graph1', graphData, layout1); //replot
             $('#daysmax').html(Math.max( ...dateDifArray).toFixed(2));
-        };
+        }; //end set high
 
     }); //document ready
 })();
