@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HFYmod-analysis
 // @namespace    http://tampermonkey.net/
-// @version      0.1.5
+// @version      0.1.6
 // @description  A tool for analysing Reddit's HFY story submissions
 // @author       /u/sswanlake
 // @match        *.reddit.com/r/HFY/comments/*
@@ -10,8 +10,8 @@
 // @require      https://cdn.plot.ly/plotly-latest.min.js
 // ==/UserScript==
 
-//previously: list linked series pages
-//what's new: fixed existing series glitch, existing series count
+//previously: fixed existing series glitch, existing series count
+//what's new: added total wordcount, and average words per day
 //todo: wordcount from other hosting sites
 
 (function() {
@@ -128,7 +128,7 @@
         <p><span id="totalSubmissions2" style="font-weight:bold; color:#0087BD;"></span> total submissions, <span id="hfycount2" style="font-weight:bold; color:#0087BD"></span> of which are in HFY</p>
                     <p style="float:right"><span id="thisyear" style="color:red">0</span> stories in the last 365 days | <span id="modremovedcount2" style="color:red"></span> have been mod removed</p>
         <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Of those, <span id="storycount2" style="font-weight:bold; color:#0087BD"></span> are stories and <span id="metacount2" style="font-weight:bold; color:#0087BD"></span> are other submissions</p>
-        <p>avg score: <span id="avgscore" style="color: red">will</span> | avg # comments: <span id="avgcomments" style="color:tomato">BOO</span> | avg pages: <span id="avglength" style="color: orange">this</span> | ttl pages: <span id="totallength" style="color:green">actually</span> | avg days b/w: <span id="avgDaysBetw" style="color:blue">work</span><span id="boop"></span> | days since latest: <span id="currentDays" style="color:DarkViolet">now?</span> | days since first: <span id="FirstDays" style="color:DarkViolet">...Ok</span> | <span id="NSFWcount2" style="color:red">grr</span> are <em style="background:Salmon; color:white">NSFW</em></p>
+        <p>avg score: <span id="avgscore" style="color: red">will</span> | avg # comments: <span id="avgcomments" style="color:tomato">BOO</span> | ttl words: <span id="ttlwords" style="color: orange">this</span> | avg pages: <span id="avglength" style="color: green">this</span> | ttl pages: <span id="totallength" style="color:green">actually</span> | avg days b/w: <span id="avgDaysBetw" style="color:blue">work</span><span id="boop"></span> | days since latest: <span id="currentDays" style="color:DarkViolet">now?</span> | days since first: <span id="FirstDays" style="color:DarkViolet">...Ok</span> | avg words/day: <span id="wordsperday" style="color:#0087BD">...Ok</span> | <span id="NSFWcount2" style="color:red">grr</span> are <em style="background:Salmon; color:white">NSFW</em></p>
         <p><span style="font-weight:bold">Max/Min:</span> <span style="color:red">Score:</span> <span id="scoremax">000</span>/ <span id="scoremin">000</span> | <span style="color:tomato">#Comments:</span> <span id="commMax">000</span>/ <span id="commMin">000</span> | <span style="color:orange">Words:</span> <span id="wordmax"></span>/ <span id="wordmin"></span>| <span style="color:green">Pages:</span> <span id="lengthmax">000</span>/ <span id="lengthmin">000</span> | <span style="color:blue">Days b/w:</span> <span id="daysmax">000</span>/ <span id="daysmin">000</span></p>
         <hr/>
         <p><strong style="font-size: 150%">WIKI:</strong> <a href="https://www.reddit.com/r/HFY/wiki/authors/${author}" target="_blank" style="font-size: 150%">${author}</a>  &nbsp; &nbsp; <span id="existsYN"></span>  &nbsp; &nbsp; <a onclick="$('.authorpage').toggle()">hide author</a></p>
@@ -313,8 +313,10 @@
                     $("#avgDaysBetw").html(`${(cleanDif.reduce((a,b) => a + b, 0) /storycount2).toFixed(2)}`);
                     $('#avgscore').html(`${(scorearray.reduce((a,b) => a + b, 0) /storycount2).toFixed(2)}`);
                     $('#avgcomments').html(`${(commentsarray.reduce((a,b) => a + b, 0) /storycount2).toFixed(1)}`); //summed then divided for avg
+                    $('#ttlwords').html(`${(wordarray.reduce((a,b) => a + b, 0))}`);
                     $('#avglength').html(`${((lengtharray.reduce((a,b) => a + b, 0)/2000)/storycount2).toFixed(2)}`);  //1 page is 2000 characters
-                    $("#totallength").html(`${(lengtharray.reduce((a,b) => a + b, 0)/2000).toFixed(2)}`); //1 page is 2000 characters
+                    $('#totallength').html(`${(lengtharray.reduce((a,b) => a + b, 0)/2000).toFixed(2)}`); //1 page is 2000 characters
+                    $('#wordsperday').html(`${(wordarray.reduce((a,b) => a + b, 0)/FirstDays).toFixed(2)}`);
                     $('#modremovedcount2').html(`${modremovedcount2}`);
                 }); //end each
 
@@ -365,7 +367,7 @@
 
         load(lastID);
         var meh = $(".expando").text().replace(/(?:\r\n|\r|\n)/g, '').length;
-        $("#pages").html( `- ${meh/2000}`); //length of current page, printed on the button
+        $("#pages").html( `- ${(meh/2000).toFixed(2)} pages`); //length of current page, printed on the button
 
         //graphing!
         var graphData;
