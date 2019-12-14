@@ -1,17 +1,18 @@
 // ==UserScript==
 // @name         HFYmod-analysis
 // @namespace    http://tampermonkey.net/
-// @version      0.1.6
+// @version      0.1.7
 // @description  A tool for analysing Reddit's HFY story submissions
 // @author       /u/sswanlake
 // @match        *.reddit.com/r/HFY/comments/*
+// @match        *.reddit.com/r/hfy/comments/*
 // @updateURL    https://github.com/sswanlake/HFYmod-Analysis/raw/master/HFYmod-Analysis.user.js
 // @grant        none
 // @require      https://cdn.plot.ly/plotly-latest.min.js
 // ==/UserScript==
 
-//previously: fixed existing series glitch, existing series count
-//what's new: added total wordcount, and average words per day
+//previously: added total wordcount, and average words per day
+//what's new: if length<1 deleted, if you upvoted add ^, improved othersite detection, graph words/10 (for better scaling)
 //todo: wordcount from other hosting sites
 
 (function() {
@@ -95,7 +96,7 @@
             // find one result
             var result = this.getFromBetween(sub1,sub2);
             // push it to the results array
-            this.results.push("[" + result + "], &nbsp; ");
+            this.results.push(" [" + result + "], &nbsp;");
             seriesCounter++;
             // remove the most recently found one from the string
             this.removeFromBetween(sub1,sub2);
@@ -128,14 +129,15 @@
         <p><span id="totalSubmissions2" style="font-weight:bold; color:#0087BD;"></span> total submissions, <span id="hfycount2" style="font-weight:bold; color:#0087BD"></span> of which are in HFY</p>
                     <p style="float:right"><span id="thisyear" style="color:red">0</span> stories in the last 365 days | <span id="modremovedcount2" style="color:red"></span> have been mod removed</p>
         <p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Of those, <span id="storycount2" style="font-weight:bold; color:#0087BD"></span> are stories and <span id="metacount2" style="font-weight:bold; color:#0087BD"></span> are other submissions</p>
+                    <p style="float:right"><span id="shortcount2" style="color:orange;background:linen">0</span> stories are less than 1000 char long</p>
         <p>avg score: <span id="avgscore" style="color: red">will</span> | avg # comments: <span id="avgcomments" style="color:tomato">BOO</span> | ttl words: <span id="ttlwords" style="color: orange">this</span> | avg pages: <span id="avglength" style="color: green">this</span> | ttl pages: <span id="totallength" style="color:green">actually</span> | avg days b/w: <span id="avgDaysBetw" style="color:blue">work</span><span id="boop"></span> | days since latest: <span id="currentDays" style="color:DarkViolet">now?</span> | days since first: <span id="FirstDays" style="color:DarkViolet">...Ok</span> | avg words/day: <span id="wordsperday" style="color:#0087BD">...Ok</span> | <span id="NSFWcount2" style="color:red">grr</span> are <em style="background:Salmon; color:white">NSFW</em></p>
         <p><span style="font-weight:bold">Max/Min:</span> <span style="color:red">Score:</span> <span id="scoremax">000</span>/ <span id="scoremin">000</span> | <span style="color:tomato">#Comments:</span> <span id="commMax">000</span>/ <span id="commMin">000</span> | <span style="color:orange">Words:</span> <span id="wordmax"></span>/ <span id="wordmin"></span>| <span style="color:green">Pages:</span> <span id="lengthmax">000</span>/ <span id="lengthmin">000</span> | <span style="color:blue">Days b/w:</span> <span id="daysmax">000</span>/ <span id="daysmin">000</span></p>
         <hr/>
         <p><strong style="font-size: 150%">WIKI:</strong> <a href="https://www.reddit.com/r/HFY/wiki/authors/${author}" target="_blank" style="font-size: 150%">${author}</a>  &nbsp; &nbsp; <span id="existsYN"></span>  &nbsp; &nbsp; <a onclick="$('.authorpage').toggle()">hide author</a></p>
         <p><b>Existing Series Pages:</b> <span id="NumSerAnalasis" style="color:navy; background-color:lightgreen"></span><span id="NGRAM" style="color:forestgreen"></span></p>
         <p>&nbsp;</p>
-        <b><table><tr><td style="width:30px;">&nbsp;# </td><td style="width:400px;">Title </td><td style="width:140px;">Date </td><td style="width:70px;">Score </td><td style="width:55px">Comm.</td><td style="width:55px;">Chars </td><td style="width:55px;">Words </td><td style="width:55px;">Pages </td><td>Days Between </td></tr></table></b>
-        <div class="authorpage" id="authorpage" style="border:1px solid gray; background:Lavender; height:250px; overflow-y:auto; overflow-x:auto;">
+        <b><table><tr><td style="width:30px;">&nbsp;# </td><td style="width:400px;">Title </td><td style="width:25px;">flair </td><td style="width:35px;">&nbsp;arc? </td><td style="width:140px;">Date </td><td style="width:70px;">Score </td><td style="width:55px">Comm.</td><td style="width:55px;">Chars </td><td style="width:55px;">Words </td><td style="width:55px;">Pages </td><td>Days Between </td></tr></table></b>
+        <div class="authorpage" id="authorpage" style="border:1px solid gray; background:Lavender; height:600px; overflow-y:auto; overflow-x:auto;">
         <table class="boop"><span id="stories2"></span></table>
         <p>&nbsp;</p>
         </div>
@@ -190,6 +192,7 @@
         var CurrentDays;
         var FirstDays;
         var thisyear = 0;
+        var shortcount2 = 0;
 
         var commentsarray = [0];
         var scorearray = [0];
@@ -204,27 +207,23 @@
                     if (post.data.subreddit == "HFY"){
                         hfycount2++;
                         var flair = post.data.link_flair_css_class;
-                        if ( !((flair == "META") || (flair == "Text") || (flair == "Misc") || (flair == "Video") || (post.data.link_flair_text == "WP")) ){ //WP needs a special case because reasons. Meta used to be META. There used to be an "OC Oneshot" flair. Also, there used to be a "meta mod" flair
+                        var short2 = "";
+                        if ( !((flair == "META") || (flair == "Text") || (flair == "Misc") || (flair == "Video") || (post.data.link_flair_text == "WP") ) ){ //|| (flair == "WP") //WP needs a special case because reasons. Meta used to be META. There used to be an "OC Oneshot" flair. Also, there used to be a "meta mod" flair
 
                             var date = timeConvert(post.data.created_utc);
-                            var leng = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, '').length; //remove all linebreaks .match(/([\s]+)/g).length
-                            if (post.data.selftext.length > 0) {var spaces = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, ' ').match(/([\s]+)/g).length; }//count number of spaces (theoretically number of words)
+                            if (post.data.selftext.length > 1) {
+                                var leng = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, '').length; //remove all linebreaks .match(/([\s]+)/g).length
+                                var spaces = (post.data.selftext).replace(/(?:\r\n|\r|\n)/g, ' ').match(/([\s]+)/g).length;
+                            } else {leng=0; spaces=0;} //count number of spaces (theoretically number of words)
+                            if (spaces < 350) {short2 = "~SHORT~"; shortcount2++;}; // for low word count
                             var storytitle = (post.data.title).replace(`[OC]`, '').replace(`[oc]`, '').replace(`(OC)`, '').replace(`[PI]`, '').trim()
 //                            var shortlink = `https://redd.it/${post.data.id}`;
 
                             var other = "";
-                            if ( (post.data.selftext).includes(`](https://arkmuse.org/threads`) ) {
-                                if (leng < 600) { leng = 0; }
-                                other += "ArkMuse ";
-                            }; //if hosted on ArkMuse
-                            if ( (post.data.selftext).includes(`](https://docs.google.com/document`) ) {
-                                if (leng < 600) { leng = 0; }
-                                other += "GDocs ";
-                            }; //if hosted on Gdocs
-                            if ( (post.data.selftext).includes(`](https://www.royalroad.com/fiction/`) || (post.data.selftext).includes(`](https://www.royalroadl.com/fiction/`) ) {
-                                if (leng < 600) { leng = 0; } //"|text to get| Other text....".match(/\|(.*?)\|/)
-                                other += "RoyalRoad ";
-                            }; //if hosted on royalroad.com
+                            var othersite = [`deathworlders.com`, `hfy-archive.org`, `arkmuse.org`, `docs.google.com`, `www.royalroad`];
+                            if ( othersite.some(substring=>post.data.selftext.includes(substring)) ) {
+                                other += othersite.filter(substring=>post.data.selftext.includes(substring));
+                            }; //end if includes any one of the links to common other sites
 
                             if ((!post.data.removed) && (!post.data.banned_by)){
                                 FirstDays = ((Date.now() /1000) - post.data.created_utc) / (60 * 60 * 24);
@@ -234,6 +233,13 @@
                                     $("#thisyear").html(`${thisyear}`);
                                 };
                                 storycount2++;
+
+                                var liked = "";
+                                if (post.data.likes) {
+                                    liked = "^";
+                                } else if (post.data.likes == false) {
+                                    liked = "&#8964;" //downwards ^
+                                };
 
                                 scorearray[storycount2] = post.data.score;
                                 lengtharray[storycount2] = leng;
@@ -251,26 +257,30 @@
                             //width:30px # - width:400px Title - width:140px Date - width:70px Score - width:55px Comments - width:55px Chars - width:55px Words - width:55px Pages - width:55px Days Between - Hosted On
                                 if (post.data.over_18) {
                                     $("#stories2").prepend( `<tr style="color:darkred"><td style="width:30px;">${storycount2}&nbsp;</td>
-                                                                    <td style="width:400px;">[<a style="color:DarkSlateBlue" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>] <emphasis style="color:red;">*NSFW*</emphasis>&nbsp;</td>
+                                                                    <td style="width:400px;"><b style="color:orange; background:peachpuff">${short2}</b>${liked}[<a style="color:DarkSlateBlue" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>] <emphasis style="color:red;">*NSFW*</emphasis>&nbsp;</td>
+                                                                    <td style="width:25px;">${post.data.link_flair_text}&nbsp;</td>
+                                                                    <td style="width:35px;">${post.data.archived}&nbsp;</td>
                                                                     <td style="width:140px;">${date}&nbsp;</td>
                                                                     <td style="width:70px;">score:${post.data.score}&nbsp;</td>
                                                                     <td style="width:55px;color:red">${commentsarray[storycount2]}&nbsp;</td>
-                                                                    <td style="width:55px;">${leng}&nbsp;</td>
+                                                                    <td style="width:55px;">${leng}<b style="color:orange; background:peachpuff">${short2}</b>&nbsp;</td>
                                                                     <td style="width:55px;">${spaces}&nbsp;</td>
-                                                                    <td style="width:55px;">${leng/2000}&nbsp;</td>
-                                                                    <td style="width:55px;color:indianred">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
+                                                                    <td style="width:55px;">${(leng/2000).toFixed(1)}&nbsp;</td>
+                                                                    <td style="width:55px;color:indianred">&#8964;${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
                                                                     <td>${other}&nbsp;</td></tr>` );
                                     NSFWcount2++;
                                 } else {
                                     $("#stories2").prepend( `<tr><td style="width:30px;">${storycount2}&nbsp;</td>
-                                                                    <td style="width:400px;">[<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>]&nbsp;</td>
+                                                                    <td style="width:400px;"><b style="color:orange; background:peachpuff">${short2}</b>${liked}[<a href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>]&nbsp;</td>
+                                                                    <td style="width:25px;">${post.data.link_flair_text}&nbsp;</td>
+                                                                    <td style="width:35px;">${post.data.archived}&nbsp;</td>
                                                                     <td style="width:140px;color:blue">${date}</span>&nbsp;</td>
                                                                     <td style="width:70px;">score:${post.data.score}&nbsp;</td>
                                                                     <td style="width:55px;color:orange">${commentsarray[storycount2]}&nbsp;</td>
-                                                                    <td style="width:55px;color:green">${leng}&nbsp;</td>
+                                                                    <td style="width:55px;color:green">${leng}<b style="color:orange; background:peachpuff">${short2}</b></td>
                                                                     <td style="width:55px;color:green">${spaces}&nbsp;</td>
-                                                                    <td style="width:55px;color:green">${leng/2000}&nbsp;</td>
-                                                                    <td style="width:55px;color:purple">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
+                                                                    <td style="width:55px;color:green">${(leng/2000).toFixed(1)}&nbsp;</td>
+                                                                    <td style="width:55px;color:purple">&#8964;${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
                                                                     <td>${other}&nbsp;</td></tr>` );
                                 } //most things will be this
                             } else {
@@ -278,25 +288,29 @@
                                 hfycount2--;
                                 if (post.data.over_18) {
                                     $("#stories2").prepend( `<tr style="color:sienna"><td style="width:30px;">${modremovedcount2}&nbsp;</td>
-                                                                    <td style="width:400px">[<a style="color:sienna" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>] <emphasis style="color:red;">*NSFW*</emphasis>&nbsp;</td>
+                                                                    <td style="width:400px"><b style="color:orange; background:peachpuff">${short2}</b>[<a style="color:sienna" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>] <emphasis style="color:red;">*NSFW*</emphasis>&nbsp;</td>
+                                                                    <td style="width:25px;">${post.data.link_flair_text}&nbsp;</td>
+                                                                    <td style="width:35px;">${post.data.archived}&nbsp;</td>
                                                                     <td style="width:140px">${date}&nbsp;</td>
                                                                     <td style="width:70px">score:${post.data.score}&nbsp;</td>
                                                                     <td style="width:55px">${commentsarray[storycount2]}&nbsp;</td>
-                                                                    <td style="width:55px">${leng}&nbsp;</td>
+                                                                    <td style="width:55px">${leng}<b style="color:orange; background:peachpuff">${short2}</b>&nbsp;</td>
                                                                     <td style="width:55px">${spaces}&nbsp;</td>
-                                                                    <td style="width:55px">${leng/2000}&nbsp;</td>
-                                                                    <td style="width:55px">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
+                                                                    <td style="width:55px">${(leng/2000).toFixed(1)}&nbsp;</td>
+                                                                    <td style="width:55px">&#8964;${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
                                                                     <td>${other}&nbsp;</td></tr>` );
                                 } else {
                                     $("#stories2").prepend( `<tr style="color:orange"><td style="width:30px;">${modremovedcount2}&nbsp;</td>
-                                                                    <td style="width:400px">[<a style="color:orange" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>]&nbsp;</td>
+                                                                    <td style="width:400px"><b style="color:orange; background:peachpuff">${short2}</b>[<a style="color:orange" href="${post.data.url}" title="flair: ${post.data.link_flair_text}">${storytitle}</a>]&nbsp;</td>
+                                                                    <td style="width:25px;">${post.data.link_flair_text}&nbsp;</td>
+                                                                    <td style="width:35px;">${post.data.archived}&nbsp;</td>
                                                                     <td style="width:140px;">${date}</span>&nbsp;</td>
                                                                     <td style="width:70px">score:${post.data.score}&nbsp;</td>
                                                                     <td style="width:55px;color:coral">${commentsarray[storycount2]}&nbsp;</td>
-                                                                    <td style="width:55px">${leng}&nbsp;</td>
+                                                                    <td style="width:55px">${leng}<b style="color:orange; background:peachpuff">${short2}</b>&nbsp;</td>
                                                                     <td style="width:55px">${spaces}&nbsp;</td>
-                                                                    <td style="width:55px">${leng/2000}&nbsp;</td>
-                                                                    <td style="width:55px">${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
+                                                                    <td style="width:55px">${(leng/2000).toFixed(1)}&nbsp;</td>
+                                                                    <td style="width:55px">&#8964;${dateDifArray[storycount2].toFixed(3)}&nbsp;</td>
                                                                     <td>${other}&nbsp;</td></tr>` );
                                 } //end if NSFW
 //                                storycount2--;
@@ -318,6 +332,7 @@
                     $('#totallength').html(`${(lengtharray.reduce((a,b) => a + b, 0)/2000).toFixed(2)}`); //1 page is 2000 characters
                     $('#wordsperday').html(`${(wordarray.reduce((a,b) => a + b, 0)/FirstDays).toFixed(2)}`);
                     $('#modremovedcount2').html(`${modremovedcount2}`);
+                    $('#shortcount2').html(`${shortcount2}`);
                 }); //end each
 
                 if (foo.data.children && foo.data.children.length > 0) {
@@ -325,7 +340,7 @@
                     totalSubmissions2 += foo.data.children.length;
                     $('#totalSubmissions2').html(`${totalSubmissions2-modremovedcount2}`);
                     load(lastID);
-                }; //end if no posts
+                }; //end if no posts (this is what causes the loop)
             }) //end getJSON
               .done(function() {
 
@@ -375,7 +390,7 @@
         $('#graphBtn').click(function() {
             var pageArray = [0];
             for (var x = 0, l = lengtharray.length; x < l; x++) {
-                pageArray[x] = lengtharray[x] / 2000;
+                pageArray[x] = wordarray[x] / 10;
             } //divides each entry by 2000, and stores the result in pageArray
 
             var table = document.getElementsByClassName('boop')[0],
@@ -397,7 +412,7 @@
                 x: lengtharray.length,
                 y: pageArray,
                 type: 'scatter',
-                name: 'length over time'
+                name: 'Words/10 over time'
             }
 
             var graphDataTrace3 = {
